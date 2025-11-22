@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(market_simulator VERSION 0.1 LANGUAGES CXX)
+project(lob-system VERSION 0.1 LANGUAGES CXX)
 
 enable_testing()
 
