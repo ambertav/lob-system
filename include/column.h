@@ -4,38 +4,25 @@
 #include <optional>
 #include <typeindex>
 
-
-struct ColumnBase
-{
-  virtual ~ColumnBase() = default;
-  virtual size_t size() const = 0;
-  virtual std::type_index get_type() const = 0;
-};
-
 template <typename T>
-class Column : public ColumnBase 
+class Column 
 {
     private:
     std::vector<std::optional<T>> data;
-    std::type_index type_info{typeid(T)};
 
   public:
+    Column() = default;
     Column(const std::vector<std::optional<T>>& d) : data(d) {};
 
     using iterator = typename std::vector<std::optional<T>>::iterator;
     using const_iterator = typename std::vector<std::optional<T>>::const_iterator;
-
-    std::type_index get_type() const override
-    {
-      return type_info;
-    }
 
     void append(std::optional<T> value)
     {
       data.push_back(value);
     }
 
-    size_t size() const override
+    size_t size() const
     {
       return data.size();
     }
