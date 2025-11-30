@@ -60,7 +60,9 @@ class DataFrame {
 
   void read_csv(const std::string& csv,
                 const std::unordered_map<std::string, ColumnType>& types = {});
-  void read_json(const std::string& json);
+
+  // TO-DO: simple custom json parser if necessary
+  // void read_json(const std::string& json);
 
   size_t size() const;
   bool empty() const;

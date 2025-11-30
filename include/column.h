@@ -32,13 +32,16 @@ class Column {
 
   void set_null_count(size_t n) { null_count = n; }
 
-  void increment_null_count() { ++null_count; }
-
   size_t size() const { return data.size(); }
 
   bool empty() const { return data.empty(); }
 
-  void append(std::optional<T> value) { data.emplace_back(value); }
+  void append(std::optional<T> value) {
+    if (!value.has_value()) {
+      ++null_count;
+    }
+    data.emplace_back(value);
+  }
 
   std::optional<T>& operator[](size_t i) {
     if (i >= data.size()) {

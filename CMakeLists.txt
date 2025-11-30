@@ -46,12 +46,9 @@ file(GLOB_RECURSE TEST_SOURCES CONFIGURE_DEPENDS
   ${CMAKE_SOURCE_DIR}/tests/*.cpp
 )
 
-file(GLOB_RECURSE PRODUCTION_SOURCES
-  ${CMAKE_SOURCE_DIR}/src/*.cpp
-)
-
 add_executable(tests ${TEST_SOURCES} ${PRODUCTION_SOURCES})
 target_include_directories(tests PRIVATE ${CMAKE_SOURCE_DIR}/include)
+target_link_libraries(tests PRIVATE GTest::gtest_main)
 set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
 
 include(GoogleTest)

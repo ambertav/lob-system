@@ -16,8 +16,7 @@ void DataFrame::read_csv(
     const std::unordered_map<std::string, ColumnType>& types) {
   std::ifstream file{csv};
   if (!file.is_open()) {
-    std::cerr << "failed to open data file " << csv << "\n";
-    return;
+    throw std::runtime_error("failed to open file: " + csv);
   }
 
   file.seekg(0, std::ios::end);
@@ -29,8 +28,7 @@ void DataFrame::read_csv(
 
   size_t header_end(buffer.find('\n'));
   if (header_end == std::string::npos) {
-    std::cerr << "missing header in data file " << csv << "\n";
-    return;
+    throw std::invalid_argument("missing header in file: " + csv);
   }
 
   std::string_view header{buffer.data(), header_end};
@@ -95,24 +93,14 @@ void DataFrame::read_csv(
             if constexpr (std::is_same_v<T, Column<int>>) {
               std::optional<int> parsed_value{Utils::parse<int>(value)};
               col.append(parsed_value);
-              if (!parsed_value.has_value()) {
-                col.increment_null_count();
-              }
             } else if constexpr (std::is_same_v<T, Column<double>>) {
               std::optional<double> parsed_value{Utils::parse<double>(value)};
               col.append(parsed_value);
-              if (!parsed_value.has_value()) {
-                col.increment_null_count();
-              }
             } else if constexpr (std::is_same_v<T, Column<std::string>>) {
               std::optional<std::string> parsed_value{
                   value.empty() ? std::nullopt
                                 : std::make_optional<std::string>(value)};
               col.append(parsed_value);
-
-              if (!parsed_value.has_value()) {
-                col.increment_null_count();
-              }
             }
           },
           column);
@@ -124,7 +112,8 @@ void DataFrame::read_csv(
   }
 }
 
-void DataFrame::read_json(const std::string& json) {}
+// TO-DO: simple custom json parser if necessary
+// void DataFrame::read_json(const std::string& json) {}
 
 size_t DataFrame::size() const { return rows * cols; }
 
