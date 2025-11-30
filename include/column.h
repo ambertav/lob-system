@@ -40,7 +40,7 @@ class Column {
     if (!value.has_value()) {
       ++null_count;
     }
-    data.emplace_back(value);
+    data.emplace_back(std::move(value));
   }
 
   std::optional<T>& operator[](size_t i) {
@@ -57,6 +57,19 @@ class Column {
     }
 
     return data[i];
+  }
+
+  void erase(size_t index) {
+    if (index >= data.size())
+    {
+        throw std::out_of_range("column index out of range");
+    }
+
+    if (!data[index].has_value()) {
+        --null_count;
+    }
+
+    data.erase(data.begin() + index);
   }
 
   iterator begin() { return data.begin(); }

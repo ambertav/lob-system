@@ -8,10 +8,18 @@
 
 #include "utils.h"
 
+// =========================
+// constructors
+// =========================
+
 DataFrame::DataFrame(std::vector<std::string> cn)
     : column_info(std::move(cn)) {}
 
-void DataFrame::read_csv(
+// =========================
+// file i/o methods
+// =========================
+
+void DataFrame::from_csv(
     const std::string& csv,
     const std::unordered_map<std::string, ColumnType>& types) {
   std::ifstream file{csv};
@@ -91,15 +99,14 @@ void DataFrame::read_csv(
           [&](auto& col) {
             using T = std::decay_t<decltype(col)>;
             if constexpr (std::is_same_v<T, Column<int>>) {
-              std::optional<int> parsed_value{Utils::parse<int>(value)};
-              col.append(parsed_value);
+              col.append(Utils::parse<int>(value));
             } else if constexpr (std::is_same_v<T, Column<double>>) {
-              std::optional<double> parsed_value{Utils::parse<double>(value)};
-              col.append(parsed_value);
+              col.append(Utils::parse<double>(value));
             } else if constexpr (std::is_same_v<T, Column<std::string>>) {
-              std::optional<std::string> parsed_value{
-                  value.empty() ? std::nullopt
-                                : std::make_optional<std::string>(value)};
+              std::optional<std::string> parsed_value{};
+              if (!value.empty()) {
+                parsed_value.emplace(value);
+              }
               col.append(parsed_value);
             }
           },
@@ -115,6 +122,10 @@ void DataFrame::read_csv(
 // TO-DO: simple custom json parser if necessary
 // void DataFrame::read_json(const std::string& json) {}
 
+// =========================
+// size methods
+// =========================
+
 size_t DataFrame::size() const { return rows * cols; }
 
 bool DataFrame::empty() const { return rows == 0; }
@@ -124,6 +135,72 @@ std::pair<size_t, size_t> DataFrame::shape() const { return {rows, cols}; }
 size_t DataFrame::nrows() const { return rows; }
 
 size_t DataFrame::ncols() const { return cols; }
+
+// =========================
+// column methods
+// =========================
+
+std::vector<std::string> DataFrame::column_names() const { return column_info; }
+
+bool DataFrame::has_column(const std::string& column_name) const {
+  return columns.contains(column_name);
+}
+
+void DataFrame::drop_column(const std::string& column_name) {
+  auto it{columns.find(column_name)};
+  if (it == columns.end()) {
+    throw std::invalid_argument("column not found: " + column_name);
+  }
+
+  columns.erase(it);
+
+  std::erase_if(column_info, [&](const auto& col) { return col == column_name; });
+
+  --cols;
+}
+
+// =========================
+// row methods
+// =========================
+
+Row DataFrame::get_row(size_t index) const {
+  if (index >= rows) {
+    throw std::out_of_range("index out of range");
+  }
+
+  Row row{};
+  for (const auto& column_name : column_info) {
+    const auto& column{columns.at(column_name)};
+
+    std::visit(
+        [&column_name, &row, &index](const auto& col) {
+          const auto& val_opt{col[index]};
+
+          row.data.emplace(column_name, val_opt);
+        },
+        column);
+  }
+
+  return row;
+}
+
+void DataFrame::drop_row(size_t index) {
+  if (index >= rows) {
+    throw std::out_of_range("index out of range");
+  }
+
+  for (const auto& column_name : column_info) {
+    auto& column{columns.at(column_name)};
+
+    std::visit([&](auto& col) { col.erase(index); }, column);
+  }
+
+  --rows;
+}
+
+// =========================
+// display methods
+// =========================
 
 void DataFrame::head(size_t n) const {
   if (rows < n) {
@@ -139,6 +216,34 @@ void DataFrame::tail(size_t n) const {
   } else {
     print(rows - n, rows);
   }
+}
+
+void DataFrame::display(size_t index) const {
+  if (rows == 0) {
+    return;
+  }
+
+  if (index >= rows) {
+    throw std::out_of_range("index out of range");
+  }
+
+  print(index, index + 1);
+}
+
+void DataFrame::display(size_t start, size_t end) const {
+  if (rows == 0) {
+    return;
+  }
+
+  if (start >= rows || end > rows) {
+    throw std::out_of_range("index out of range");
+  }
+
+  if (start >= end) {
+    throw std::invalid_argument("invalid range input");
+  }
+
+  print(start, end);
 }
 
 void DataFrame::info() const {
@@ -189,6 +294,10 @@ void DataFrame::info() const {
   std::cout << "memory usage: " << this->size() << " bytes\n"
             << "-----------------------------------\n";
 }
+
+// =========================
+// private helper methods
+// =========================
 
 void DataFrame::normalize_length() {
   for (auto& column : std::views::values(columns)) {
@@ -316,7 +425,7 @@ void DataFrame::create_columns(
 }
 
 void DataFrame::print(size_t start, size_t end) const {
-  std::vector<int> widths{};  // for formating
+  std::vector<int> widths{};  // for formatting
   widths.reserve(column_info.size() + 1);
 
   widths.push_back(2);
