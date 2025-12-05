@@ -1,13 +1,14 @@
 #pragma once
 
 #include <algorithm>
+#include <functional>
 #include <memory>
 #include <stdexcept>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
 #include <variant>
 #include <vector>
-#include <functional>
 
 #include "column.h"
 #include "row.h"
@@ -88,6 +89,28 @@ class DataFrame {
   bool has_column(const std::string& column_name) const;
 
   template <typename T>
+  void add_column(const std::string& column_name, auto&& data) {
+    auto it{std::ranges::find(column_info, column_name)};
+    if (it != column_info.end()) {
+      throw std::runtime_error("column already exists in dataframe");
+    }
+
+    column_info.emplace_back(column_name);
+    columns[column_name] = Column<T>(std::forward<decltype(data)>(data));
+    ++cols;
+
+    if (rows == data.size()) {
+      return;
+    }
+
+    if (rows < data.size()) {
+      rows = data.size();  // new max length column
+    }
+
+    normalize_length();
+  }
+
+  template <typename T>
   const Column<T>* get_column(const std::string& column_name) const {
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
@@ -105,28 +128,6 @@ class DataFrame {
     }
 
     return std::get_if<Column<T>>(&it->second);
-  }
-
-  template <typename T>
-  void add_column(const std::string& column_name, const std::vector<T>& data) {
-    auto it{std::ranges::find(column_info, column_name)};
-    if (it != column_info.end()) {
-      throw std::runtime_error("column already exists in dataframe");
-    }
-
-    column_info.emplace_back(column_name);
-    columns[column_name] = Column<T>(data);
-    ++cols;
-
-    if (rows == data.size()) {
-      return;
-    }
-
-    if (rows < data.size()) {
-      rows = data.size();  // new max length column
-    }
-
-    normalize_length();
   }
 
   void drop_column(const std::string& column_name);
@@ -203,9 +204,9 @@ class DataFrame {
   // cleaning methods
   // =========================
 
-  void dropna();
-  void drop_duplicates();
-  void fillna();
+  DataFrame& dropna(const std::vector<std::string>& subset = {},
+                    int threshold = 0);
+  DataFrame& drop_duplicates(const std::vector<std::string>& subset = {});
 
   // =========================
   // filtering methods
@@ -216,8 +217,8 @@ class DataFrame {
   void sort_by(std::function<bool(size_t, size_t)> comparator);
   void sort_by(const std::string& column_name, bool ascending = true);
 
-  DataFrame select(const std::vector<std::string>& co) const;
-  DataFrame get_last(size_t n) const;
+  DataFrame select(const std::vector<std::string>& subset) const;
+  DataFrame get_last(size_t start) const;
 
   // =========================
   // aggregation methods
@@ -261,14 +262,14 @@ class DataFrame {
   // =========================
  private:
   void normalize_length();
-
   std::unordered_map<std::string, ColumnType> infer_types(
       std::string_view data, const std::vector<std::string_view>& headers,
       const std::unordered_map<std::string, ColumnType>& types) const;
-
   void create_columns(const std::vector<std::string_view>& headers,
                       const std::unordered_map<std::string, ColumnType>& types,
                       size_t size);
-
+  void compact_rows(const std::vector<size_t>& removal_indices);
+  void validate_subset(const std::vector<std::string>& subset) const;
+  void combine_hash(size_t& row_hash, size_t value_hash) const;
   void print(size_t start, size_t end) const;
 };

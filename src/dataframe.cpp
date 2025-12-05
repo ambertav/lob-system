@@ -47,16 +47,11 @@ void DataFrame::from_csv(
       std::count(buffer.begin() + header_end, buffer.end(), '\n'))};
 
   // compare types with headers
-  bool invalid_columns{false};
   for (const auto& [col, _] : types) {
     if (std::ranges::find(headers, col) == headers.end()) {
-      invalid_columns = true;
-      break;
+      throw std::invalid_argument(
+          "specified input types contains invalid column:" + col);
     }
-  }
-  if (invalid_columns) {
-    throw std::invalid_argument(
-        "specified input types contains invalid columns");
   }
 
   if (types.size() != headers.size()) {
@@ -191,6 +186,139 @@ void DataFrame::drop_row(size_t index) {
   }
 
   --rows;
+}
+
+// =========================
+// cleaning methods
+// =========================
+
+DataFrame& DataFrame::dropna(const std::vector<std::string>& subset,
+                             int threshold) {
+  const std::vector<std::string>* target_columns{};
+
+  if (subset.empty()) {
+    target_columns = &column_info;
+  } else {
+    validate_subset(subset);
+    target_columns = &subset;
+  }
+
+  std::vector<size_t> removal_indices{};
+
+  for (size_t i{0}; i < rows; ++i) {
+    bool remove{false};
+    size_t count{};
+
+    for (const auto& column_name : *target_columns) {
+      const auto& col{columns.at(column_name)};
+      std::visit(
+          [&](const auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            if (Utils::is_null<T>(column[i])) {
+              ++count;
+            }
+          },
+          col);
+
+      if (count > threshold) {
+        remove = true;
+      }
+    }
+
+    if (remove) {
+      removal_indices.push_back(i);
+    }
+  }
+
+  compact_rows(removal_indices);
+
+  return *this;
+}
+
+DataFrame& DataFrame::drop_duplicates(const std::vector<std::string>& subset) {
+  const std::vector<std::string>* target_columns{};
+  if (subset.empty()) {
+    target_columns = &column_info;
+  } else {
+    validate_subset(subset);
+    target_columns = &subset;
+  }
+
+  std::unordered_set<size_t> seen{};
+  std::vector<size_t> removal_indices{};
+
+  for (size_t i{0}; i < rows; ++i) {
+    size_t row_hash{};
+
+    for (const auto& column_name : *target_columns) {
+      const auto& col{columns.at(column_name)};
+      std::visit(
+          [&](const auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            combine_hash(row_hash, std::hash<T>{}(column[i]));
+          },
+          col);
+    }
+
+    if (seen.contains(row_hash)) {
+      removal_indices.push_back(i);
+    } else {
+      seen.insert(row_hash);
+    }
+  }
+
+  compact_rows(removal_indices);
+
+  return *this;
+}
+
+// =========================
+// filtering methods
+// =========================
+
+DataFrame DataFrame::select(const std::vector<std::string>& subset) const {
+  if (subset.empty()) {
+    throw std::invalid_argument("no columns indicated for selection");
+  }
+
+  validate_subset(subset);
+
+  DataFrame df{};
+
+  for (const auto& column_name : subset) {
+    const auto& col{columns.at(column_name)};
+
+    std::visit(
+        [&](const auto& column) {
+          using T = std::decay_t<decltype(column)>::value_type;
+          std::vector<T> copy(column.begin(), column.end());
+
+          df.add_column<T>(column_name, std::move(copy));
+        },
+        col);
+  }
+
+  return df;
+}
+
+DataFrame DataFrame::get_last(size_t start) const {
+  if (start >= rows) {
+    throw std::out_of_range("index out of range");
+  }
+
+  DataFrame df{};
+  for (const auto& [column_name, col] : columns) {
+    std::visit(
+        [&](const auto& column) {
+          using T = std::decay_t<decltype(column)>::value_type;
+          std::vector<T> copy(column.begin() + start, column.end());
+
+          df.add_column<T>(column_name, std::move(copy));
+        },
+        col);
+  }
+
+  return df;
 }
 
 // =========================
@@ -416,6 +544,48 @@ void DataFrame::create_columns(
         break;
     }
   }
+}
+
+void DataFrame::compact_rows(const std::vector<size_t>& removal_indices) {
+  // build removal true / false vector
+  std::vector<bool> remove(rows, false);
+  for (auto& index : removal_indices) {
+    remove[index] = true;
+  }
+
+  for (auto& [_, col] : columns) {
+    std::visit(
+        [&](auto& c) {
+          auto shifter = [&](auto& column) {
+            size_t write_position{};
+            for (size_t i{0}; i < column.size(); ++i) {
+              if (remove[i] == false) {
+                column[write_position++] = std::move(column[i]);
+              }
+            }
+
+            column.resize(write_position);
+          };
+
+          shifter(c);
+        },
+        col);
+  }
+
+  rows -= removal_indices.size();
+}
+
+void DataFrame::validate_subset(const std::vector<std::string>& subset) const {
+  for (const auto& col : subset) {
+    if (std::ranges::find(column_info, col) == column_info.end()) {
+      throw std::invalid_argument(
+          "specified column input contains invalid column: " + col);
+    }
+  }
+}
+
+void DataFrame::combine_hash(size_t& row_hash, size_t value_hash) const {
+  row_hash ^= value_hash + 0x9e3779b9 + (row_hash << 6) + (row_hash >> 2);
 }
 
 void DataFrame::print(size_t start, size_t end) const {

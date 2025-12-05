@@ -61,7 +61,7 @@ class Column {
     data.emplace_back(std::move(value));
   }
 
-  ColumnType type() { return type; }
+  ColumnType get_type() { return type; }
 
   T& operator[](size_t i) {
     if (i >= data.size()) {
@@ -90,6 +90,8 @@ class Column {
 
     data.erase(data.begin() + index);
   }
+
+  void resize(size_t count) { data.resize(count); }
 
   iterator begin() { return data.begin(); }
 
