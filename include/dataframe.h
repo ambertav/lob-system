@@ -136,38 +136,8 @@ class DataFrame {
   // row methods
   // =========================
 
-  template <typename T>
-  void add_row(const std::unordered_map<std::string, T>& data) {
-    for (const auto& [column_name, val] : data) {
-      if (!columns.contains(column_name)) {
-        throw std::invalid_argument("invalid data column '" + column_name +
-                                    "' not found in columns");
-      }
-    }
-
-    for (const auto& column_name : column_info) {
-      auto& column{columns.at(column_name)};
-
-      auto it{data.find(column_name)};
-      T value{(it == data.end()) ? Utils::get_null<T>() : it->second};
-
-      std::visit(
-          [&](auto& col) {
-            using U = std::decay_t<decltype(col)>::value_type;
-
-            if constexpr (std::is_same_v<U, T>) {
-              col.append(value);
-            } else {
-              throw std::invalid_argument(
-                  "type mismatch  in update(), column '" + column_name +
-                  "' expects a different type");
-            }
-          },
-          column);
-    }
-
-    ++rows;
-  }
+  void add_row(const Row& row);
+  void add_row(const std::unordered_map<std::string, RowVariant>& data);
 
   template <typename T>
   void update(size_t index, const std::string& column_name, const T& value) {
@@ -188,7 +158,7 @@ class DataFrame {
           if constexpr (std::is_same_v<U, T>) {
             col[index] = value;
           } else {
-            throw std::invalid_argument("type mismatch  in update(), column '" +
+            throw std::invalid_argument("type mismatch, column '" +
                                         column_name +
                                         "' expects a different type");
           }
@@ -209,38 +179,107 @@ class DataFrame {
   DataFrame& drop_duplicates(const std::vector<std::string>& subset = {});
 
   // =========================
-  // filtering methods
+  // selection and sorting methods
   // =========================
 
-  void filter(std::function<bool(size_t)> predicate);
-
-  void sort_by(std::function<bool(size_t, size_t)> comparator);
-  void sort_by(const std::string& column_name, bool ascending = true);
+  DataFrame& sort_by(const std::string& column_name, bool ascending = true);
 
   DataFrame select(const std::vector<std::string>& subset) const;
   DataFrame get_last(size_t start) const;
 
   // =========================
-  // aggregation methods
+  // statistical methods
   // =========================
 
   void describe() const;
 
   template <typename T>
-  T maximum() const;
+  T maximum(const std::string& column_name) const {
+    if (rows == 0) {
+      throw std::invalid_argument("cannot get maximum of empty dataframe");
+    }
+
+    auto it{columns.find(column_name)};
+    if (it == columns.end()) {
+      throw std::invalid_argument("column not found: " + column_name);
+    }
+    const auto& target{it->second};
+
+    const auto* col_ptr{std::get_if<Column<T>>(&target)};
+    if (col_ptr == nullptr) {
+      throw std::invalid_argument("type mismatch, column '" + column_name + 
+                                  "' expects a different type");
+    }
+
+    const auto& column{*col_ptr};
+
+    // find first non null for initialization
+    size_t start{0};
+    while (start < rows && Utils::is_null(column[start])) {
+      ++start;
+    }
+
+    if (start == rows) {
+      throw std::invalid_argument("all values are null");
+    }
+
+    T max{column[start]};
+    for (size_t i{start + 1}; i < rows; ++i) {
+      if (!Utils::is_null(column[i]) &&
+          column[i] > max) {  // disregard null values
+        max = column[i];
+      }
+    }
+
+    return max;
+  }
 
   template <typename T>
-  T minimum() const;
+  T minimum(const std::string& column_name) const {
+    if (rows == 0) {
+      throw std::invalid_argument("cannot get minimum of empty dataframe");
+    }
+
+    auto it{columns.find(column_name)};
+    if (it == columns.end()) {
+      throw std::invalid_argument("column not found: " + column_name);
+    }
+    const auto& target{it->second};
+
+    const auto* col_ptr{std::get_if<Column<T>>(&target)};
+    if (col_ptr == nullptr) {
+      throw std::invalid_argument("type mismatch, column '" + column_name +
+                                  "' expects a different type");
+    }
+
+    const auto& column{*col_ptr};
+
+    // find first non null for initialization
+    size_t start{0};
+    while (start < rows && Utils::is_null(column[start])) {
+      ++start;
+    }
+
+    if (start == rows) {
+      throw std::invalid_argument("all values are null");
+    }
+
+    T min{column[start]};
+    for (size_t i{start + 1}; i < rows; ++i) {
+      if (!Utils::is_null(column[i]) &&
+          column[i] < min) {  // disregard null values
+        min = column[i];
+      }
+    }
+
+    return min;
+  }
 
   template <typename T>
-  T sum() const;
+  T mode(const std::string& column_name) const {}
 
-  template <typename T>
-  T mode() const;
-
-  template <typename T>
-  T median() const;
-
+  double sum() const;
+  double median() const;
   double mean() const;
   double standard_deviation() const;
   double variance() const;

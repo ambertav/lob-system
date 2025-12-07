@@ -41,12 +41,16 @@ inline std::vector<std::string_view> split(std::string_view sv,
   return tokens;
 }
 
+/*
+NOTE: using min values as null for int64 and double
+should be out of range for data and preserves sort
+*/
 template <typename T>
 inline T get_null() {
   if constexpr (std::is_same_v<T, int64_t>) {
     return std::numeric_limits<int64_t>::min();
   } else if constexpr (std::is_same_v<T, double>) {
-    return std::numeric_limits<double>::quiet_NaN();
+    return std::numeric_limits<double>::lowest();
   } else if constexpr (std::is_same_v<T, std::string>) {
     return "";
   }
@@ -57,7 +61,7 @@ inline bool is_null(const T& value) {
   if constexpr (std::is_same_v<T, int64_t>) {
     return value == std::numeric_limits<int64_t>::min();
   } else if constexpr (std::is_same_v<T, double>) {
-    return std::isnan(value);
+    return value == std::numeric_limits<double>::lowest();
   } else if constexpr (std::is_same_v<T, std::string>) {
     return value.empty();
   }
