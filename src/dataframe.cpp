@@ -317,8 +317,7 @@ DataFrame& DataFrame::drop_duplicates(const std::vector<std::string>& subset) {
 // selection and sorting methods
 // =========================
 
-DataFrame& DataFrame::sort_by(const std::string& column_name,
-                              bool ascending) {
+DataFrame& DataFrame::sort_by(const std::string& column_name, bool ascending) {
   std::vector<size_t> indices{};
   for (size_t i{0}; i < rows; ++i) {
     indices.push_back(i);
@@ -414,8 +413,30 @@ DataFrame DataFrame::get_last(size_t start) const {
 // statistical methods
 // =========================
 
+double DataFrame::sum(const std::string& column_name) const {
+  return call_statistical_column_method(
+      column_name, [](const auto& col) { return col.sum(); });
+}
 
+double DataFrame::median(const std::string& column_name) const {
+  return call_statistical_column_method(
+      column_name, [](const auto& col) { return col.median(); });
+}
 
+double DataFrame::mean(const std::string& column_name) const {
+  return call_statistical_column_method(
+      column_name, [](const auto& col) { return col.mean(); });
+}
+
+double DataFrame::standard_deviation(const std::string& column_name) const {
+  return call_statistical_column_method(
+      column_name, [](const auto& col) { return col.standard_deviation(); });
+}
+
+double DataFrame::variance(const std::string& column_name) const {
+  return call_statistical_column_method(
+      column_name, [](const auto& col) { return col.variance(); });
+}
 
 // =========================
 // display methods

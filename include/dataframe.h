@@ -195,51 +195,6 @@ class DataFrame {
 
   template <typename T>
   T maximum(const std::string& column_name) const {
-    if (rows == 0) {
-      throw std::invalid_argument("cannot get maximum of empty dataframe");
-    }
-
-    auto it{columns.find(column_name)};
-    if (it == columns.end()) {
-      throw std::invalid_argument("column not found: " + column_name);
-    }
-    const auto& target{it->second};
-
-    const auto* col_ptr{std::get_if<Column<T>>(&target)};
-    if (col_ptr == nullptr) {
-      throw std::invalid_argument("type mismatch, column '" + column_name + 
-                                  "' expects a different type");
-    }
-
-    const auto& column{*col_ptr};
-
-    // find first non null for initialization
-    size_t start{0};
-    while (start < rows && Utils::is_null(column[start])) {
-      ++start;
-    }
-
-    if (start == rows) {
-      throw std::invalid_argument("all values are null");
-    }
-
-    T max{column[start]};
-    for (size_t i{start + 1}; i < rows; ++i) {
-      if (!Utils::is_null(column[i]) &&
-          column[i] > max) {  // disregard null values
-        max = column[i];
-      }
-    }
-
-    return max;
-  }
-
-  template <typename T>
-  T minimum(const std::string& column_name) const {
-    if (rows == 0) {
-      throw std::invalid_argument("cannot get minimum of empty dataframe");
-    }
-
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
       throw std::invalid_argument("column not found: " + column_name);
@@ -252,37 +207,48 @@ class DataFrame {
                                   "' expects a different type");
     }
 
-    const auto& column{*col_ptr};
-
-    // find first non null for initialization
-    size_t start{0};
-    while (start < rows && Utils::is_null(column[start])) {
-      ++start;
-    }
-
-    if (start == rows) {
-      throw std::invalid_argument("all values are null");
-    }
-
-    T min{column[start]};
-    for (size_t i{start + 1}; i < rows; ++i) {
-      if (!Utils::is_null(column[i]) &&
-          column[i] < min) {  // disregard null values
-        min = column[i];
-      }
-    }
-
-    return min;
+    return col_ptr->maximum();
   }
 
   template <typename T>
-  T mode(const std::string& column_name) const {}
+  T minimum(const std::string& column_name) const {
+    auto it{columns.find(column_name)};
+    if (it == columns.end()) {
+      throw std::invalid_argument("column not found: " + column_name);
+    }
+    const auto& target{it->second};
 
-  double sum() const;
-  double median() const;
-  double mean() const;
-  double standard_deviation() const;
-  double variance() const;
+    const auto* col_ptr{std::get_if<Column<T>>(&target)};
+    if (col_ptr == nullptr) {
+      throw std::invalid_argument("type mismatch, column '" + column_name +
+                                  "' expects a different type");
+    }
+
+    return col_ptr->minimum();
+  }
+
+  template <typename T>
+  std::vector<T> mode(const std::string& column_name) const {
+    auto it{columns.find(column_name)};
+    if (it == columns.end()) {
+      throw std::invalid_argument("column not found: " + column_name);
+    }
+    const auto& target{it->second};
+
+    const auto* col_ptr{std::get_if<Column<T>>(&target)};
+    if (col_ptr == nullptr) {
+      throw std::invalid_argument("type mismatch, column '" + column_name +
+                                  "' expects a different type");
+    }
+
+    return col_ptr->mode();
+  }
+
+  double sum(const std::string& column_name) const;
+  double median(const std::string& column_name) const;
+  double mean(const std::string& column_name) const;
+  double standard_deviation(const std::string& column_name) const;
+  double variance(const std::string& column_name) const;
 
   // =========================
   // display methods
@@ -311,4 +277,17 @@ class DataFrame {
   void validate_subset(const std::vector<std::string>& subset) const;
   void combine_hash(size_t& row_hash, size_t value_hash) const;
   void print(size_t start, size_t end) const;
+
+  template <typename Func>
+  double call_statistical_column_method(const std::string& column_name,
+                                        Func func) const {
+    if (rows == 0) {
+      throw std::invalid_argument("cannot get median of empty column");
+    }
+    auto it{columns.find(column_name)};
+    if (it == columns.end()) {
+      throw std::invalid_argument("column not found: " + column_name);
+    }
+    return std::visit(func, it->second);
+  }
 };
