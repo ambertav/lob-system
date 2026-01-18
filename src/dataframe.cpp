@@ -6,6 +6,7 @@
 #include <iomanip>
 #include <iostream>
 #include <ranges>
+#include <cstring>
 
 #include "utils.h"
 
@@ -155,19 +156,35 @@ void DataFrame::to_csv(const std::string& csv) const {
 }
 
 DataFrame DataFrame::from_bytes(const std::vector<std::byte>& bytes) {
+  if (bytes.size() < sizeof(size_t) * 2) {
+    throw std::runtime_error("invalid number of bytes");
+  }
   size_t offset{};
 
-  size_t nr{*(reinterpret_cast<const size_t*>(bytes.data() + offset))};
+  size_t nr{};
+  std::memcpy(&nr, bytes.data() + offset, sizeof(size_t));
   offset += sizeof(size_t);
 
-  size_t nc{*(reinterpret_cast<const size_t*>(bytes.data() + offset))};
+  size_t nc{};
+  std::memcpy(&nc, bytes.data() + offset, sizeof(size_t));
   offset += sizeof(size_t);
 
   std::vector<std::string> names{};
+  names.reserve(nc);
+
   for (size_t i{}; i < nc; ++i) {
-    uint32_t length{
-        *(reinterpret_cast<const uint32_t*>(bytes.data() + offset))};
+    if (offset + sizeof(uint32_t) > bytes.size()) {
+      throw std::runtime_error(
+          "truncated data, cannot read column name length");
+    }
+
+    uint32_t length{};
+    std::memcpy(&length, bytes.data() + offset, sizeof(uint32_t));
     offset += sizeof(uint32_t);
+
+    if (offset + length > bytes.size()) {
+      throw std::runtime_error("truncated data, cannot read column name");
+    }
 
     const char* name_data{reinterpret_cast<const char*>(bytes.data() + offset)};
     names.emplace_back(name_data, length);
@@ -175,11 +192,17 @@ DataFrame DataFrame::from_bytes(const std::vector<std::byte>& bytes) {
   }
 
   std::unordered_map<std::string, ColumnVariant> col_map{};
+  col_map.reserve(nc);
+
   for (size_t i{}; i < nc; ++i) {
     const std::string& col_name{names[i]};
 
-    ColumnType type{
-        *(reinterpret_cast<const ColumnType*>(bytes.data() + offset))};
+    if (offset + sizeof(ColumnType) > bytes.size()) {
+      throw std::runtime_error("truncated data, cannot read column type");
+    }
+
+    ColumnType type{};
+    std::memcpy(&type, bytes.data() + offset, sizeof(ColumnType));
     offset += sizeof(ColumnType);
 
     size_t col_data_size{};
@@ -188,15 +211,29 @@ DataFrame DataFrame::from_bytes(const std::vector<std::byte>& bytes) {
     } else if (type == ColumnType::Double) {
       col_data_size = nr * sizeof(double);
     } else if (type == ColumnType::String) {
-      size_t temp_offset = offset;
+      size_t temp_offset{offset};
       for (size_t row{}; row < nr; ++row) {
-        uint32_t str_length{
-            *(reinterpret_cast<const uint32_t*>(bytes.data() + temp_offset))};
-        temp_offset += sizeof(uint32_t) + str_length;
+        if (temp_offset + sizeof(uint32_t) > bytes.size()) {
+          throw std::runtime_error("truncated data, cannot read string length");
+        }
+
+        uint32_t str_length{};
+        std::memcpy(&str_length, bytes.data() + temp_offset, sizeof(uint32_t));
+        temp_offset += sizeof(uint32_t);
+
+        if (temp_offset + str_length > bytes.size()) {
+          throw std::runtime_error("truncated data, cannot read string data");
+        }
+
+        temp_offset += str_length;
       }
       col_data_size = temp_offset - offset;
     } else {
       throw std::runtime_error("unknown column type during deserialization");
+    }
+
+    if (offset + col_data_size > bytes.size()) {
+      throw std::runtime_error("truncated data, cannot read column data");
     }
 
     std::vector<std::byte> column_bytes(bytes.begin() + offset,

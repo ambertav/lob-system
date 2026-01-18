@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstring>
 #include <iomanip>
 #include <iostream>
 #include <limits>
@@ -132,19 +133,36 @@ class Column {
   }
 
   static Column<T> from_bytes(const std::vector<std::byte>& bytes) {
+    if (bytes.empty()) {
+      throw std::runtime_error("cannot deserialize from empty bytes");
+    }
+
     if constexpr (std::is_arithmetic_v<T>) {
-      const T* data_ptr{reinterpret_cast<const T*>(bytes.data())};
+      if (bytes.size() % sizeof(T) != 0) {
+        throw std::runtime_error("invalid byte vector size for type");
+      }
+
       const size_t n{bytes.size() / sizeof(T)};
-      std::vector<T> d(data_ptr, data_ptr + n);
+      std::vector<T> d(n);
+      std::memcpy(d.data(), bytes.data(), bytes.size());
       return Column<T>(std::move(d));
+
     } else {
       std::vector<std::string> d{};
       size_t offset{};
 
       while (offset < bytes.size()) {
-        uint32_t length{
-            *(reinterpret_cast<const uint32_t*>(bytes.data() + offset))};
+        if (offset + sizeof(uint32_t) > bytes.size()) {
+          throw std::runtime_error("truncated data, cannot read string length");
+        }
+
+        uint32_t length{};
+        std::memcpy(&length, bytes.data() + offset, sizeof(uint32_t));
         offset += sizeof(uint32_t);
+
+        if (offset + length > bytes.size()) {
+          throw std::runtime_error("truncated data, cannot read string data");
+        }
 
         const char* str_data{
             reinterpret_cast<const char*>(bytes.data() + offset)};
@@ -240,14 +258,14 @@ class Column {
     return modes;
   }
 
-  double percentile(double p) const {
+  double percentile(double p = 0.0) const {
     if (data.empty()) {
-      throw std::invalid_argument("cannot get median of empty column");
+      throw std::invalid_argument("cannot get percentile of empty column");
     }
 
     size_t non_null{data.size() - null_count};
     if (non_null == 0) {
-      throw std::invalid_argument("cannot get median: no non-null values");
+      throw std::invalid_argument("cannot get percentile: no non-null values");
     }
 
     if (p < 0.0 || p > 1.0) {
@@ -263,9 +281,13 @@ class Column {
         }
       }
 
+      if (copy.size() == 1) {
+        return static_cast<double>(copy[0]);
+      }
+      
       std::sort(copy.begin(), copy.end());
 
-      double index{p * (copy.size() + 1)};
+      double index{p * (copy.size() - 1)};
       size_t lower{static_cast<size_t>(std::floor(index))};
       size_t upper{static_cast<size_t>(std::ceil(index))};
 
