@@ -99,19 +99,40 @@ TYPED_TEST(ColumnTypedTest, AppendNull) {
   EXPECT_TRUE(Utils::is_null(col[0]));
 }
 
-TYPED_TEST(ColumnTypedTest, OperatorThrowsOutOfRange) {
+TYPED_TEST(ColumnTypedTest, SerializesAndDeserializesCorrectly) {
   typename TestFixture::Col col{};
-  col.append(this->get_test_value());
 
-  EXPECT_THROW(col[5], std::out_of_range);
+  for (int i{}; i < 5; ++i) {
+    col.append(this->get_test_value(i));
+  }
+
+  auto bytes{col.to_bytes()};
+  auto restored{Column<TypeParam>::from_bytes(bytes)};
+
+  EXPECT_EQ(restored.nrows(), col.nrows());
+  EXPECT_TRUE(restored == col);
 }
 
-TYPED_TEST(ColumnTypedTest, NullCountManagement) {
+TYPED_TEST(ColumnTypedTest, SerializationStressTest) {
   typename TestFixture::Col col{};
+  const size_t size{100000};
+  for (size_t i{}; i < size; ++i) {
+    col.append(this->get_test_value(1 % 100));
+  }
 
-  size_t nulls{5};
-  col.set_null_count(nulls);
-  EXPECT_EQ(col.get_null_count(), nulls);
+  auto bytes{col.to_bytes()};
+  auto restored{Column<TypeParam>::from_bytes(bytes)};
+
+  EXPECT_EQ(restored.nrows(), size);
+  EXPECT_TRUE(restored == col);
+}
+
+TYPED_TEST(ColumnTypedTest, DeserialzationFailsOnInvalidBytes) {
+  std::vector<std::byte> invalid_bytes{std::byte{0xFF}, std::byte{0xAA},
+                                       std::byte{0x55}};
+
+  EXPECT_THROW(Column<TypeParam>::from_bytes(invalid_bytes),
+               std::runtime_error);
 }
 
 TYPED_TEST(ColumnTypedTest, MaximumCalculatesCorrectly) {
@@ -185,6 +206,43 @@ TYPED_TEST(ColumnTypedTest, ModeCalculatesCorrectly) {
   EXPECT_EQ(two_modes.size(), 2);
   EXPECT_THAT(two_modes,
               testing::UnorderedElementsAre(first_mode, second_mode));
+}
+
+TYPED_TEST(ColumnTypedTest, PercentileCalculatesCorrectly) {
+  typename TestFixture::Col col{};
+  if constexpr (std::is_same_v<TypeParam, std::string>) {
+    EXPECT_THROW(col.percentile(), std::invalid_argument);
+  } else {
+    // throws on empty column
+    EXPECT_THROW(col.percentile(0.5), std::invalid_argument);
+
+    // throws on column with only nulls
+    col.append(this->get_null_test_value());
+    EXPECT_THROW(col.percentile(0.5), std::invalid_argument);
+    col.clear();
+
+    int n{10};
+    for (int i{}; i < n; ++i) {
+      col.append(static_cast<TypeParam>(i));
+    }
+
+    double p0{col.percentile(0.0)};
+    double p25{col.percentile(0.25)};
+    double p50{col.percentile(0.5)};
+    double p75{col.percentile(0.75)};
+    double p100{col.percentile(1.0)};
+
+    EXPECT_EQ(p0, 0.0);
+    EXPECT_EQ(p100, static_cast<double>(n - 1));
+
+    EXPECT_LE(p0, p25);
+    EXPECT_LE(p25, p50);
+    EXPECT_LE(p50, p75);
+    EXPECT_LE(p75, p100);
+
+    EXPECT_THROW(col.percentile(-0.1), std::invalid_argument);
+    EXPECT_THROW(col.percentile(1.1), std::invalid_argument);
+  }
 }
 
 TYPED_TEST(ColumnTypedTest, SumCalculatesCorrectly) {
@@ -303,4 +361,36 @@ TYPED_TEST(ColumnTypedTest, VarianceCalculatesCorrectly) {
     }
     EXPECT_EQ(col.variance(), expected_var);
   }
+}
+
+TYPED_TEST(ColumnTypedTest, EqualityOperatorOverloadedCorrectly) {
+  typename TestFixture::Col col1{};
+  typename TestFixture::Col col2{};
+
+  for (int i{}; i < 5; ++i) {
+    col1.append(this->get_test_value(i));
+    col2.append(this->get_test_value(i));
+  }
+
+  EXPECT_TRUE(col1 == col2);
+  EXPECT_FALSE(col1 != col2);
+
+  col2.append(this->get_test_value(100));
+  EXPECT_FALSE(col1 == col2);
+  EXPECT_TRUE(col1 != col2);
+}
+
+TYPED_TEST(ColumnTypedTest, OperatorThrowsOutOfRange) {
+  typename TestFixture::Col col{};
+  col.append(this->get_test_value());
+
+  EXPECT_THROW(col[5], std::out_of_range);
+}
+
+TYPED_TEST(ColumnTypedTest, NullCountManagement) {
+  typename TestFixture::Col col{};
+
+  size_t nulls{5};
+  col.set_null_count(nulls);
+  EXPECT_EQ(col.get_null_count(), nulls);
 }
