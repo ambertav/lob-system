@@ -10,9 +10,10 @@
 #include <variant>
 #include <vector>
 
-#include "column.h"
-#include "row.h"
+#include "core/column.h"
+#include "core/row.h"
 
+namespace df {
 using ColumnVariant =
     std::variant<Column<int64_t>, Column<double>, Column<std::string>>;
 
@@ -32,7 +33,7 @@ class DataFrame {
   DataFrame() = default;
 
   explicit DataFrame(std::vector<std::string> cn);
-  template <typename T>
+  template <Storable T>
   explicit DataFrame(std::vector<std::string> cn,
                      std::vector<std::vector<T>>&& d) {
     if (d.size() != cn.size()) {
@@ -93,8 +94,8 @@ class DataFrame {
   std::vector<std::string> column_names() const;
   bool has_column(const std::string& column_name) const;
 
-  template <typename T>
-  void add_column(const std::string& column_name, auto&& data) {
+  template <Storable T>
+  void add_column(const std::string& column_name, const std::vector<T>& data) {
     auto it{std::ranges::find(column_info, column_name)};
     if (it != column_info.end()) {
       throw std::runtime_error("column already exists in dataframe");
@@ -115,7 +116,7 @@ class DataFrame {
     normalize_length();
   }
 
-  template <typename T>
+  template <Storable T>
   const Column<T>* get_column(const std::string& column_name) const {
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
@@ -125,7 +126,7 @@ class DataFrame {
     return std::get_if<Column<T>>(&it->second);
   }
 
-  template <typename T>
+  template <Storable T>
   Column<T>* get_column(const std::string& column_name) {
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
@@ -148,7 +149,7 @@ class DataFrame {
   void add_row(const Row& row);
   void add_row(const std::unordered_map<std::string, RowVariant>& data);
 
-  template <typename T>
+  template <Storable T>
   void update(size_t index, const std::string& column_name, const T& value) {
     if (index >= rows) {
       throw std::out_of_range("index out of range");
@@ -197,6 +198,39 @@ class DataFrame {
                     int threshold = 0);
   DataFrame& drop_duplicates(const std::vector<std::string>& subset = {});
 
+//   template <Storable T>
+//   DataFrame& fillna(const std::vector<std::string>& subset = {},
+//                     const T& value) {
+//     const std::vector<std::string>* target_columns{};
+
+//     if (subset.empty()) {
+//       target_columns = &column_info;
+//     } else {
+//       validate_subset(subset);
+//       target_columns = &subset;
+//     }
+
+//     for (size_t i{0}; i < rows; ++i) {
+//       for (const auto& column_name : *target_columns) {
+//         const auto* column{get_column<T>(column_name)};
+
+//         if (!column) {
+//           continue;
+//         }
+
+//         if (Utils::is_null<T>(*column[i])) {
+//           *column[i] = value;
+//           // DECREMENT NULL
+//         }
+//       }
+//     }
+
+//     return *this;
+//   }
+
+//   DataFrame& ffill(const std::vector<std::string>& subset = {});
+//   DataFrame& bfill(const std::vector<std::string>& subset = {});
+
   // =========================
   // selection and sorting methods
   // =========================
@@ -212,7 +246,7 @@ class DataFrame {
 
   void describe() const;
 
-  template <typename T>
+  template <Storable T>
   T maximum(const std::string& column_name) const {
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
@@ -229,7 +263,7 @@ class DataFrame {
     return col_ptr->maximum();
   }
 
-  template <typename T>
+  template <Storable T>
   T minimum(const std::string& column_name) const {
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
@@ -246,7 +280,7 @@ class DataFrame {
     return col_ptr->minimum();
   }
 
-  template <typename T>
+  template <Storable T>
   std::vector<T> mode(const std::string& column_name) const {
     auto it{columns.find(column_name)};
     if (it == columns.end()) {
@@ -314,3 +348,4 @@ class DataFrame {
     return std::visit(func, it->second);
   }
 };
+}  // namespace df

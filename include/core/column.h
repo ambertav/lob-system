@@ -14,9 +14,14 @@
 
 #include "utils.h"
 
+namespace df {
 enum class ColumnType { Int64, Double, String };
 
 template <typename T>
+concept Storable = std::is_same_v<T, int64_t> || std::is_same_v<T, double> ||
+                   std::is_same_v<T, std::string>;
+
+template <Storable T>
 class Column {
  public:
   using value_type = T;
@@ -42,7 +47,7 @@ class Column {
     data.reserve(d.size());
 
     for (const auto& x : d) {
-      if (Utils::is_null(x)) {
+      if (utils::is_null(x)) {
         ++null_count;
       }
       data.emplace_back(x);
@@ -63,7 +68,7 @@ class Column {
   }
 
   void append(T value) {
-    if (Utils::is_null(value)) {
+    if (utils::is_null(value)) {
       ++null_count;
     }
     data.emplace_back(std::move(value));
@@ -88,7 +93,7 @@ class Column {
       stats_by_row["75%"] = percentile(0.75);
       stats_by_row["max"] = maximum();
 
-      for (const auto& stat : Utils::describe_order) {
+      for (const auto& stat : utils::describe_order) {
         std::cout << std::setw(10) << stat;
         std::cout << std::setw(12) << std::fixed << std::setprecision(2)
                   << stats_by_row[stat] << '\n';
@@ -184,7 +189,7 @@ class Column {
     }
 
     size_t start{0};
-    while (start < data.size() && Utils::is_null(data[start])) {
+    while (start < data.size() && utils::is_null(data[start])) {
       ++start;
     }
 
@@ -194,7 +199,7 @@ class Column {
 
     T max{data[start]};
     for (size_t i{start + 1}; i < data.size(); ++i) {
-      if (!Utils::is_null(data[i]) && data[i] > max) {  // disregard null values
+      if (!utils::is_null(data[i]) && data[i] > max) {  // disregard null values
         max = data[i];
       }
     }
@@ -208,7 +213,7 @@ class Column {
     }
 
     size_t start{0};
-    while (start < data.size() && Utils::is_null(data[start])) {
+    while (start < data.size() && utils::is_null(data[start])) {
       ++start;
     }
 
@@ -218,7 +223,7 @@ class Column {
 
     T min{data[start]};
     for (size_t i{start + 1}; i < data.size(); ++i) {
-      if (!Utils::is_null(data[i]) && data[i] < min) {  // disregard null values
+      if (!utils::is_null(data[i]) && data[i] < min) {  // disregard null values
         min = data[i];
       }
     }
@@ -234,7 +239,7 @@ class Column {
     std::vector<T> modes{};
     std::unordered_map<T, size_t> frequency{};
     for (size_t i{0}; i < data.size(); ++i) {
-      if (!Utils::is_null<T>(data[i])) {
+      if (!utils::is_null<T>(data[i])) {
         ++frequency[data[i]];
       }
     }
@@ -276,7 +281,7 @@ class Column {
       std::vector<T> copy{};
       copy.reserve(data.size() - null_count);
       for (const auto& value : data) {
-        if (!Utils::is_null(value)) {
+        if (!utils::is_null(value)) {
           copy.push_back(value);
         }
       }
@@ -284,7 +289,7 @@ class Column {
       if (copy.size() == 1) {
         return static_cast<double>(copy[0]);
       }
-      
+
       std::sort(copy.begin(), copy.end());
 
       double index{p * (copy.size() - 1)};
@@ -316,7 +321,7 @@ class Column {
     double sum{};
     if constexpr (std::is_arithmetic_v<T>) {
       for (size_t i{0}; i < data.size(); ++i) {
-        if (!Utils::is_null(data[i])) {
+        if (!utils::is_null(data[i])) {
           sum += data[i];
         }
       }
@@ -342,7 +347,7 @@ class Column {
       std::vector<T> copy{};
       copy.reserve(data.size() - null_count);
       for (const auto& value : data) {
-        if (!Utils::is_null(value)) {
+        if (!utils::is_null(value)) {
           copy.push_back(value);
         }
       }
@@ -400,7 +405,7 @@ class Column {
     if constexpr (std::is_arithmetic_v<T>) {
       double mu{mean()};
       for (size_t i{0}; i < data.size(); ++i) {
-        if (!Utils::is_null(data[i])) {
+        if (!utils::is_null(data[i])) {
           summation += (data[i] - mu) * (data[i] - mu);
         }
       }
@@ -440,7 +445,7 @@ class Column {
       throw std::out_of_range("column index out of range");
     }
 
-    if (Utils::is_null<T>(data[index])) {
+    if (utils::is_null<T>(data[index])) {
       --null_count;
     }
 
@@ -465,3 +470,4 @@ class Column {
   T& back() { return data.back(); }
   const T& back() const { return data.back(); }
 };
+}  // namespace df

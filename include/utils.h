@@ -1,11 +1,12 @@
 #pragma once
 
+#include <array>
 #include <charconv>
 #include <string_view>
 #include <vector>
-#include <array>
 
-namespace Utils {
+namespace df {
+namespace utils {
 inline std::string_view trim(std::string_view sv) {
   while (!sv.empty() && (std::isspace(static_cast<unsigned char>(sv.front())) ||
                          sv.front() == '\r' || sv.front() == '\n')) {
@@ -88,6 +89,7 @@ inline T parse(std::string_view sv) {
 }
 
 inline constexpr std::array<const char*, 8> describe_order{
-      "count", "mean", "std", "min", "25%", "50%", "75%", "max"};
+    "count", "mean", "std", "min", "25%", "50%", "75%", "max"};
 
-}  // namespace Utils
+}  // namespace utils
+}  // namespace df

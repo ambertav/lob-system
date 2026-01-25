@@ -11,10 +11,8 @@
 
 #include "utils.h"
 
+namespace df {
 using RowVariant = std::variant<int64_t, double, std::string>;
-
-template <typename T>
-concept RowType = requires(RowVariant v) { std::get<T>(v); };
 
 struct Row {
   std::unordered_map<std::string, RowVariant> data;
@@ -28,7 +26,7 @@ struct Row {
   Row(std::initializer_list<std::pair<const std::string, RowVariant>> il)
       : data(il.begin(), il.end()) {}
 
-  template <RowType T>
+  template <Storable T>
   std::optional<T> get(const std::string& column_name) const {
     auto it{data.find(column_name)};
     if (it == data.end()) {
@@ -43,7 +41,7 @@ struct Row {
     return *value;
   }
 
-  template <RowType T>
+  template <Storable T>
   T at(const std::string& column_name) const {
     const T* value{std::get_if<T>(&data.at(column_name))};
     if (!value) {
@@ -52,7 +50,7 @@ struct Row {
     return *value;
   }
 
-  template <RowType T>
+  template <Storable T>
   Row& set(const std::string& column_name, T value) {
     auto it{data.find(column_name)};
     if (it != data.end()) {
@@ -68,7 +66,7 @@ struct Row {
     return *this;
   }
 
-  template <RowType T>
+  template <Storable T>
   Row& update(const std::string& column_name, T value) {
     auto it{data.find(column_name)};
     if (it == data.end()) {
@@ -121,7 +119,7 @@ struct Row {
 
           std::visit(
               [&os](const auto& val) {
-                if (Utils::is_null(val)) {
+                if (utils::is_null(val)) {
                   os << "NULL";
                 } else {
                   os << val;
@@ -139,3 +137,4 @@ struct Row {
     return os;
   }
 };
+}  // namespace df
