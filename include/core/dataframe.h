@@ -62,15 +62,6 @@ class DataFrame {
 
   explicit DataFrame(size_t r, size_t c, std::vector<std::string> cn,
                      std::unordered_map<std::string, ColumnVariant> d);
-  // =========================
-  // i/o and serialization methods
-  // =========================
-
-  static DataFrame from_bytes(const std::vector<std::byte>& bytes);
-  static DataFrame from_binary(const std::string& path);
-
-  std::vector<std::byte> to_bytes() const;
-  void to_binary(const std::string& path) const;
 
   // =========================
   // size methods
