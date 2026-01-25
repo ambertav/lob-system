@@ -66,8 +66,6 @@ class DataFrame {
   // i/o and serialization methods
   // =========================
 
-  void to_csv(const std::string& csv) const;
-
   static DataFrame from_bytes(const std::vector<std::byte>& bytes);
   static DataFrame from_binary(const std::string& path);
 

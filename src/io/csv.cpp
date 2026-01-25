@@ -133,6 +133,50 @@ DataFrame from_csv(const std::string& csv,
   return DataFrame(row_count, std::move(headers), std::move(columns));
 }
 
+void to_csv(const DataFrame& df, const std::string& csv, char delimiter) {
+  std::ofstream file{csv};
+  if (!file.is_open()) {
+    throw std::runtime_error("failed to open csv file: " + csv);
+  }
+
+  const std::vector<std::string> column_names{df.column_names()};
+  for (size_t i{}; i < column_names.size(); ++i) {
+    file << column_names[i];
+    if (i < column_names.size() - 1) {
+      file << delimiter;
+    }
+  }
+  file << '\n';
+
+  std::vector<const ColumnVariant*> columns{};
+  columns.reserve(column_names.size());
+  for (const auto& name : column_names) {
+    const ColumnVariant* column_variant{df.get_column(name)};
+    if (column_variant == nullptr) {
+      throw std::runtime_error("column not found: " + name);
+    }
+    columns.push_back(column_variant);
+  }
+
+  for (size_t i{}; i < df.nrows(); ++i) {
+    for (size_t j{}; j < column_names.size(); ++j) {
+      std::visit(
+          [&](const auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            if (!utils::is_null<T>(column[i])) {
+              file << column[i];
+            }
+          },
+          *columns[j]);
+
+      if (j < column_names.size() - 1) {
+        file << delimiter;
+      }
+    }
+    file << '\n';
+  }
+}
+
 namespace {
 std::vector<std::string_view> to_tokens(std::string_view line, char delimiter) {
   std::vector<std::string_view> tokens{};

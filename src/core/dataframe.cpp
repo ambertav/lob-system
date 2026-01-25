@@ -31,40 +31,6 @@ DataFrame::DataFrame(size_t r, std::vector<std::string> cn,
 // i/o and serialization methods
 // =========================
 
-void DataFrame::to_csv(const std::string& csv) const {
-  std::ofstream file{csv};
-  if (!file.is_open()) {
-    throw std::runtime_error("failed to open file: " + csv);
-  }
-
-  for (size_t i{0}; i < column_info.size(); ++i) {
-    file << column_info[i];
-    if (i < column_info.size() - 1) {
-      file << ',';
-    }
-  }
-  file << '\n';
-
-  for (size_t i{0}; i < rows; ++i) {
-    for (size_t j{0}; j < column_info.size(); ++j) {
-      const auto& col{columns.at(column_info[j])};
-      std::visit(
-          [&](const auto& column) {
-            using T = std::decay_t<decltype(column)>::value_type;
-            if (!utils::is_null<T>(column[i])) {
-              file << column[i];
-            }
-          },
-          col);
-
-      if (j < column_info.size() - 1) {
-        file << ',';
-      }
-    }
-    file << '\n';
-  }
-}
-
 DataFrame DataFrame::from_bytes(const std::vector<std::byte>& bytes) {
   if (bytes.size() < sizeof(size_t) * 2) {
     throw std::runtime_error("invalid number of bytes");
