@@ -66,8 +66,6 @@ class DataFrame {
   // i/o and serialization methods
   // =========================
 
-  void from_csv(const std::string& csv,
-                const std::unordered_map<std::string, ColumnType>& types = {});
   void to_csv(const std::string& csv) const;
 
   static DataFrame from_bytes(const std::vector<std::byte>& bytes);
@@ -324,12 +322,6 @@ class DataFrame {
   // =========================
  private:
   void normalize_length();
-  std::unordered_map<std::string, ColumnType> infer_types(
-      std::string_view data, const std::vector<std::string_view>& headers,
-      const std::unordered_map<std::string, ColumnType>& types) const;
-  void create_columns(const std::vector<std::string_view>& headers,
-                      const std::unordered_map<std::string, ColumnType>& types,
-                      size_t size);
   void compact_rows(const std::vector<size_t>& removal_indices);
   void validate_subset(const std::vector<std::string>& subset) const;
   void combine_hash(size_t& row_hash, size_t value_hash) const;
