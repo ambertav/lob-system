@@ -23,6 +23,8 @@ concept Storable = std::is_same_v<T, int64_t> || std::is_same_v<T, double> ||
 
 template <Storable T>
 class Column {
+  friend class DataFrame;
+
  public:
   using value_type = T;
 
@@ -55,8 +57,6 @@ class Column {
   }
 
   size_t get_null_count() const { return null_count; }
-
-  void set_null_count(size_t n) { null_count = n; }
 
   size_t nrows() const { return data.size(); }
 
@@ -469,5 +469,8 @@ class Column {
   const T& front() const { return data.front(); }
   T& back() { return data.back(); }
   const T& back() const { return data.back(); }
+
+ private:
+  void decrement_null() { --null_count; }
 };
 }  // namespace df

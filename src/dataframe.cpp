@@ -11,9 +11,9 @@
 #include "utils.h"
 
 namespace df {
-// =========================
+// =====================================
 // constructors
-// =========================
+// =====================================
 
 DataFrame::DataFrame(std::vector<std::string> cn)
     : cols(cn.size()), column_info(std::move(cn)) {}
@@ -24,9 +24,9 @@ DataFrame::DataFrame(size_t r, size_t c, std::vector<std::string> cn,
   normalize_length();
 }
 
-// =========================
+// =====================================
 // i/o and serialization methods
-// =========================
+// =====================================
 
 void DataFrame::from_csv(
     const std::string& csv,
@@ -361,9 +361,9 @@ void DataFrame::to_binary(const std::string& path) const {
   file.close();
 }
 
-// =========================
+// =====================================
 // size methods
-// =========================
+// =====================================
 
 size_t DataFrame::size() const { return rows * cols; }
 
@@ -375,9 +375,9 @@ size_t DataFrame::nrows() const { return rows; }
 
 size_t DataFrame::ncols() const { return cols; }
 
-// =========================
+// =====================================
 // column methods
-// =========================
+// =====================================
 
 std::vector<std::string> DataFrame::column_names() const { return column_info; }
 
@@ -416,9 +416,9 @@ void DataFrame::drop_column(const std::string& column_name) {
   --cols;
 }
 
-// =========================
+// =====================================
 // row methods
-// =========================
+// =====================================
 
 void DataFrame::add_row(const Row& row) { add_row(row.data); }
 
@@ -521,9 +521,9 @@ void DataFrame::drop_row(size_t index) {
   --rows;
 }
 
-// =========================
+// =====================================
 // operator methods
-// =========================
+// =====================================
 
 bool DataFrame::operator==(const DataFrame& other) const {
   if (this->nrows() != other.nrows()) {
@@ -554,9 +554,9 @@ bool DataFrame::operator!=(const DataFrame& other) const {
   return !(*this == other);
 }
 
-// =========================
+// =====================================
 // cleaning methods
-// =========================
+// =====================================
 
 DataFrame& DataFrame::dropna(const std::vector<std::string>& subset,
                              int threshold) {
@@ -638,13 +638,71 @@ DataFrame& DataFrame::drop_duplicates(const std::vector<std::string>& subset) {
   return *this;
 }
 
-// DataFrame& DataFrame::ffill(const std::vector<std::string>& subset = {}) {}
+DataFrame& DataFrame::ffill(const std::vector<std::string>& subset) {
+  const std::vector<std::string>* target_columns{};
+  if (subset.empty()) {
+    target_columns = &column_info;
+  } else {
+    validate_subset(subset);
+    target_columns = &subset;
+  }
 
-// DataFrame& DataFrame::bfill(const std::vector<std::string>& subset = {}) {}
+  for (const auto& column_name : *target_columns) {
+    auto& col{columns.at(column_name)};
+    std::visit(
+        [&](auto& column) {
+          using T = std::decay_t<decltype(column)>::value_type;
 
-// =========================
+          T* last_non_null{nullptr};
+          for (size_t i{}; i < rows; ++i) {
+            if (!utils::is_null<T>(column[i])) {
+              last_non_null = &column[i];
+            } else if (last_non_null != nullptr) {
+              column[i] = *last_non_null;
+              column.decrement_null();
+            }
+          }
+        },
+        col);
+  }
+
+  return *this;
+}
+
+DataFrame& DataFrame::bfill(const std::vector<std::string>& subset) {
+  const std::vector<std::string>* target_columns{};
+  if (subset.empty()) {
+    target_columns = &column_info;
+  } else {
+    validate_subset(subset);
+    target_columns = &subset;
+  }
+
+  for (const auto& column_name : *target_columns) {
+    auto& col{columns.at(column_name)};
+    std::visit(
+        [&](auto& column) {
+          using T = std::decay_t<decltype(column)>::value_type;
+
+          T* last_non_null{nullptr};
+          for (size_t i{rows}; i > 0; --i) {
+            if (!utils::is_null<T>(column[i - 1])) {
+              last_non_null = &column[i - 1];
+            } else if (last_non_null != nullptr) {
+              column[i - 1] = *last_non_null;
+              column.decrement_null();
+            }
+          }
+        },
+        col);
+  }
+
+  return *this;
+}
+
+// =====================================
 // selection and sorting methods
-// =========================
+// =====================================
 
 DataFrame& DataFrame::sort_by(const std::string& column_name, bool ascending) {
   std::vector<size_t> indices{};
@@ -738,9 +796,9 @@ DataFrame DataFrame::get_last(size_t start) const {
   return df;
 }
 
-// =========================
+// =====================================
 // statistical methods
-// =========================
+// =====================================
 
 void DataFrame::describe() const {
   if (rows == 0) {
@@ -819,9 +877,9 @@ double DataFrame::variance(const std::string& column_name) const {
       column_name, [](const auto& col) { return col.variance(); });
 }
 
-// =========================
+// =====================================
 // display methods
-// =========================
+// =====================================
 
 void DataFrame::head(size_t n) const {
   if (rows < n) {
@@ -916,9 +974,9 @@ void DataFrame::info() const {
             << "-----------------------------------\n";
 }
 
-// =========================
+// =====================================
 // private helper methods
-// =========================
+// =====================================
 
 void DataFrame::normalize_length() {
   for (auto& column : std::views::values(columns)) {

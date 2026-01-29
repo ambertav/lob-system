@@ -388,11 +388,3 @@ TYPED_TEST(ColumnTypedTest, OperatorThrowsOutOfRange) {
 
   EXPECT_THROW(col[5], std::out_of_range);
 }
-
-TYPED_TEST(ColumnTypedTest, NullCountManagement) {
-  typename TestFixture::Col col{};
-
-  size_t nulls{5};
-  col.set_null_count(nulls);
-  EXPECT_EQ(col.get_null_count(), nulls);
-}
