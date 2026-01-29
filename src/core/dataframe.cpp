@@ -1,4 +1,4 @@
-#include "core/dataframe.h"
+#include "dataframe.h"
 
 #include <algorithm>
 #include <array>
@@ -20,12 +20,175 @@ DataFrame::DataFrame(std::vector<std::string> cn)
 
 DataFrame::DataFrame(size_t r, size_t c, std::vector<std::string> cn,
                      std::unordered_map<std::string, ColumnVariant> d)
-    : rows(r),
-      cols(c),
-      column_info(std::move(cn)),
-      columns(std::move(d)) {
+    : rows(r), cols(c), column_info(std::move(cn)), columns(std::move(d)) {
   normalize_length();
 }
+
+// =========================
+// i/o and serialization methods
+// =========================
+
+void DataFrame::from_csv(
+    const std::string& csv,
+    const std::unordered_map<std::string, ColumnType>& types, char delimiter) {
+  std::ifstream file{csv};
+  if (!file.is_open()) {
+    throw std::runtime_error("failed to open csv file: " + csv);
+  }
+
+  file.seekg(0, std::ios::end);
+  std::streamsize size(file.tellg());
+  file.seekg(0, std::ios::beg);
+
+  std::string buffer(size, '\0');
+  file.read(buffer.data(), size);
+
+  size_t header_end(buffer.find('\n'));
+  if (header_end == std::string::npos) {
+    throw std::invalid_argument("missing header in file: " + csv);
+  }
+
+  std::string_view header_sv{buffer.data(), header_end};
+  std::vector<std::string_view> headers_sv{
+      utils::to_tokens(header_sv, delimiter)};
+
+  // to reserve column vector sizes
+  size_t row_count{static_cast<size_t>(
+      std::count(buffer.begin() + header_end, buffer.end(), '\n'))};
+
+  // compare types with headers
+  for (const auto& [col, _] : types) {
+    if (std::ranges::find(headers_sv, col) == headers_sv.end()) {
+      throw std::invalid_argument(
+          "specified input types contains invalid column:" + col);
+    }
+  }
+
+  column_info.reserve(headers_sv.size());
+  for (const auto& header : headers_sv) {
+    column_info.emplace_back(header);
+  }
+
+  std::unordered_map<std::string, ColumnType> all_types{};
+  if (types.size() != column_info.size()) {
+    std::string_view data{buffer};
+    all_types = infer_types(data, column_info, types, delimiter);
+  } else {
+    all_types = types;
+  }
+
+  for (size_t i{}; i < column_info.size(); ++i) {
+    const std::string& column_name{column_info[i]};
+    const ColumnType type{all_types.at(column_name)};
+
+    switch (type) {
+      case ColumnType::Int64:
+        columns[column_name] = Column<int64_t>(row_count);
+        break;
+      case ColumnType::Double:
+        columns[column_name] = Column<double>(row_count);
+        break;
+      case ColumnType::String:
+        columns[column_name] = Column<std::string>(row_count);
+        break;
+    }
+  }
+
+  size_t line_start{header_end + 1};
+  size_t line_number{2};
+
+  while (line_start < buffer.size()) {
+    size_t line_end{buffer.find('\n', line_start)};
+    if (line_end == std::string::npos) {
+      line_end = buffer.size();
+    }
+
+    std::string_view line{buffer.data() + line_start, line_end - line_start};
+    if (utils::trim(line).empty()) {
+      line_start = line_end + 1;
+      continue;
+    }
+
+    std::vector<std::string_view> tokens{utils::to_tokens(line, delimiter)};
+    if (tokens.size() != column_info.size()) {
+      throw std::runtime_error(
+          "malformed line " + std::to_string(line_number) + ": expected " +
+          std::to_string(column_info.size()) + " columns, got " +
+          std::to_string(tokens.size()));
+    }
+
+    for (size_t i{}; i < column_info.size(); ++i) {
+      const std::string& column_name{column_info[i]};
+      const std::string_view value{utils::trim(tokens[i])};
+
+      ColumnVariant& col{columns.at(column_name)};
+
+      std::visit(
+          [&](auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+
+            if constexpr (std::is_same_v<T, int64_t>) {
+              column.append(utils::parse<int64_t>(value));
+            } else if constexpr (std::is_same_v<T, double>) {
+              column.append(utils::parse<double>(value));
+            } else if constexpr (std::is_same_v<T, std::string>) {
+              column.append(std::string(value));
+            }
+          },
+          col);
+    }
+
+    line_start = line_end + 1;
+    ++line_number;
+  }
+
+  rows = row_count;
+  cols = column_info.size();
+}
+
+void DataFrame::to_csv(const std::string& csv, char delimiter) const {
+  std::ofstream file{csv};
+  if (!file.is_open()) {
+    throw std::runtime_error("failed to open csv file: " + csv);
+  }
+
+  file << std::setprecision(17);
+
+  for (size_t i{}; i < column_info.size(); ++i) {
+    file << column_info[i];
+    if (i < column_info.size() - 1) {
+      file << delimiter;
+    }
+  }
+  file << '\n';
+
+  for (size_t i{}; i < rows; ++i) {
+    for (size_t j{}; j < column_info.size(); ++j) {
+      const auto& col{columns.at(column_info[j])};
+      std::visit(
+          [&](const auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            if (!utils::is_null<T>(column[i])) {
+              file << column[i];
+            }
+          },
+          col);
+
+      if (j < column_info.size() - 1) {
+        file << delimiter;
+      }
+    }
+    if (i < rows - 1) {
+      file << '\n';
+    }
+  }
+}
+
+static DataFrame from_bytes(const std::vector<std::byte>& bytes);
+static DataFrame from_binary(const std::string& path);
+
+std::vector<std::byte> DataFrame::to_bytes() const {}
+void DataFrame::to_binary(const std::string& path) const {}
 
 // =========================
 // size methods
@@ -633,6 +796,85 @@ void DataFrame::compact_rows(const std::vector<size_t>& removal_indices) {
   rows -= removal_indices.size();
 }
 
+std::unordered_map<std::string, ColumnType> DataFrame::infer_types(
+    std::string_view data, const std::vector<std::string>& headers,
+    const std::unordered_map<std::string, ColumnType>& types,
+    char delimiter) const {
+  std::unordered_map<std::string, ColumnType> all_types{types};
+
+  // mapping to track parseable states and column index
+  struct InferenceState {
+    size_t index;
+    bool as_int{true};
+    bool as_double{true};
+  };
+  std::unordered_map<std::string, InferenceState> column_states{};
+
+  for (size_t i{}; i < headers.size(); ++i) {
+    const std::string& column{headers[i]};
+    if (!all_types.contains(column)) {
+      column_states[column] = InferenceState{i};
+    }
+  }
+
+  size_t line_start{data.find('\n') + 1};
+  size_t line_number{2};
+
+  while (line_start < data.size() && line_number < 100) {
+    size_t line_end{data.find('\n', line_start)};
+    if (line_end == std::string_view::npos) {
+      line_end = data.size();
+    }
+
+    std::string_view line{data.data() + line_start, line_end - line_start};
+    if (utils::trim(line).empty()) {
+      line_start = line_end + 1;
+      continue;
+    }
+
+    std::vector<std::string_view> tokens{utils::to_tokens(line, delimiter)};
+
+    for (auto& [column, state] : column_states) {
+      if (!state.as_int && !state.as_double) {
+        continue;
+      }
+
+      if (state.index >= tokens.size()) {
+        continue;
+      }
+
+      const std::string_view& value{tokens[state.index]};
+
+      if (value.empty()) {
+        continue;
+      }
+
+      if (state.as_int && !utils::try_parse<int64_t>(value)) {
+        state.as_int = false;
+      }
+
+      if (state.as_double && !utils::try_parse<double>(value)) {
+        state.as_double = false;
+      }
+    }
+
+    line_start = line_end + 1;
+    ++line_number;
+  }
+
+  for (const auto& [column, state] : column_states) {
+    if (state.as_int) {
+      all_types[column] = ColumnType::Int64;
+    } else if (state.as_double) {
+      all_types[column] = ColumnType::Double;
+    } else {
+      all_types[column] = ColumnType::String;
+    }
+  }
+
+  return all_types;
+}
+
 void DataFrame::validate_subset(const std::vector<std::string>& subset) const {
   for (const auto& col : subset) {
     if (std::ranges::find(column_info, col) == column_info.end()) {
@@ -684,4 +926,4 @@ void DataFrame::print(size_t start, size_t end) const {
     std::cout << "\n";
   }
 }
-}
+}  // namespace df

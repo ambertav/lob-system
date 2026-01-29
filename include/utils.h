@@ -21,23 +21,44 @@ inline std::string_view trim(std::string_view sv) {
   return sv;
 }
 
-inline std::vector<std::string_view> split(std::string_view sv,
+inline std::vector<std::string_view> to_tokens(std::string_view sv,
                                            char delimiter) {
-  size_t start{};
   std::vector<std::string_view> tokens{};
+  size_t start{};
+  bool in_quotes{false};
 
-  while (true) {
-    auto pos{sv.find(delimiter, start)};
-    std::string_view token{};
-
-    if (pos == std::string_view::npos) {
-      token = trim(sv.substr(start));
-      tokens.emplace_back(token);
-      break;
+  for (size_t i{}; i <= sv.size(); ++i) {
+    if (i < sv.size() && sv[i] == '"') {
+      in_quotes = !in_quotes;
     }
 
-    tokens.emplace_back(sv.substr(start, pos - start));
-    start = pos + 1;
+    bool at_delimiter{false};
+    if (i < sv.size() && sv[i] == delimiter && !in_quotes) {
+      at_delimiter = true;
+    }
+
+    if (at_delimiter || i == sv.size()) {
+      std::string_view token{sv.substr(start, i - start)};
+
+      // Trim whitespace
+      while (!token.empty() &&
+             std::isspace(static_cast<unsigned char>(token.front()))) {
+        token.remove_prefix(1);
+      }
+      while (!token.empty() &&
+             std::isspace(static_cast<unsigned char>(token.back()))) {
+        token.remove_suffix(1);
+      }
+
+      // Remove surrounding quotes if present
+      if (token.size() >= 2 && token.front() == '"' && token.back() == '"') {
+        token.remove_prefix(1);
+        token.remove_suffix(1);
+      }
+
+      tokens.push_back(token);
+      start = i + 1;
+    }
   }
 
   return tokens;

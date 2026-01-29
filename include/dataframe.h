@@ -10,8 +10,8 @@
 #include <variant>
 #include <vector>
 
-#include "core/column.h"
-#include "core/row.h"
+#include "column.h"
+#include "row.h"
 
 namespace df {
 using ColumnVariant =
@@ -62,6 +62,21 @@ class DataFrame {
 
   explicit DataFrame(size_t r, size_t c, std::vector<std::string> cn,
                      std::unordered_map<std::string, ColumnVariant> d);
+
+  // =========================
+  // i/o and serialization methods
+  // =========================
+
+  void from_csv(const std::string& csv,
+                const std::unordered_map<std::string, ColumnType>& types = {},
+                char delimiter = ',');
+  void to_csv(const std::string& csv, char delimiter = ',') const;
+
+  static DataFrame from_bytes(const std::vector<std::byte>& bytes);
+  static DataFrame from_binary(const std::string& path);
+
+  std::vector<std::byte> to_bytes() const;
+  void to_binary(const std::string& path) const;
 
   // =========================
   // size methods
@@ -185,38 +200,38 @@ class DataFrame {
                     int threshold = 0);
   DataFrame& drop_duplicates(const std::vector<std::string>& subset = {});
 
-//   template <Storable T>
-//   DataFrame& fillna(const std::vector<std::string>& subset = {},
-//                     const T& value) {
-//     const std::vector<std::string>* target_columns{};
+  //   template <Storable T>
+  //   DataFrame& fillna(const std::vector<std::string>& subset = {},
+  //                     const T& value) {
+  //     const std::vector<std::string>* target_columns{};
 
-//     if (subset.empty()) {
-//       target_columns = &column_info;
-//     } else {
-//       validate_subset(subset);
-//       target_columns = &subset;
-//     }
+  //     if (subset.empty()) {
+  //       target_columns = &column_info;
+  //     } else {
+  //       validate_subset(subset);
+  //       target_columns = &subset;
+  //     }
 
-//     for (size_t i{0}; i < rows; ++i) {
-//       for (const auto& column_name : *target_columns) {
-//         const auto* column{get_column<T>(column_name)};
+  //     for (size_t i{0}; i < rows; ++i) {
+  //       for (const auto& column_name : *target_columns) {
+  //         const auto* column{get_column<T>(column_name)};
 
-//         if (!column) {
-//           continue;
-//         }
+  //         if (!column) {
+  //           continue;
+  //         }
 
-//         if (Utils::is_null<T>(*column[i])) {
-//           *column[i] = value;
-//           // DECREMENT NULL
-//         }
-//       }
-//     }
+  //         if (Utils::is_null<T>(*column[i])) {
+  //           *column[i] = value;
+  //           // DECREMENT NULL
+  //         }
+  //       }
+  //     }
 
-//     return *this;
-//   }
+  //     return *this;
+  //   }
 
-//   DataFrame& ffill(const std::vector<std::string>& subset = {});
-//   DataFrame& bfill(const std::vector<std::string>& subset = {});
+  //   DataFrame& ffill(const std::vector<std::string>& subset = {});
+  //   DataFrame& bfill(const std::vector<std::string>& subset = {});
 
   // =========================
   // selection and sorting methods
@@ -311,6 +326,10 @@ class DataFrame {
   // =========================
  private:
   void normalize_length();
+  std::unordered_map<std::string, ColumnType> infer_types(
+      std::string_view data, const std::vector<std::string>& headers,
+      const std::unordered_map<std::string, ColumnType>& types,
+      char delimiter) const;
   void compact_rows(const std::vector<size_t>& removal_indices);
   void validate_subset(const std::vector<std::string>& subset) const;
   void combine_hash(size_t& row_hash, size_t value_hash) const;
