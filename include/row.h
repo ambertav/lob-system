@@ -10,6 +10,7 @@
 #include <variant>
 
 #include "utils.h"
+#include "column.h"
 
 namespace df {
 using RowVariant = std::variant<int64_t, double, std::string>;

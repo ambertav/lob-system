@@ -2,6 +2,8 @@
 
 #include "row.h"
 
+using namespace df;
+
 class RowTest : public ::testing::Test {
  protected:
   std::unordered_map<std::string, RowVariant> row_data{{"name", "test"},

@@ -5,6 +5,8 @@
 
 #include "column.h"
 
+using namespace df;
+
 template <typename T>
 class ColumnTypedTest : public ::testing::Test {
  protected:
@@ -20,7 +22,7 @@ class ColumnTypedTest : public ::testing::Test {
     }
   }
 
-  T get_null_test_value() { return Utils::get_null<T>(); }
+  T get_null_test_value() { return utils::get_null<T>(); }
 };
 
 using MyTypes = ::testing::Types<int64_t, double, std::string>;
@@ -72,7 +74,7 @@ TYPED_TEST(ColumnTypedTest, VectorConstructorWithNull) {
     if (i % 2 == 0) {
       EXPECT_EQ(col[i], this->get_test_value(i));
     } else {
-      EXPECT_TRUE(Utils::is_null(col[i]));
+      EXPECT_TRUE(utils::is_null(col[i]));
     }
   }
 }
@@ -96,7 +98,7 @@ TYPED_TEST(ColumnTypedTest, AppendNull) {
 
   EXPECT_EQ(col.nrows(), 1);
   EXPECT_EQ(col.get_null_count(), 1);
-  EXPECT_TRUE(Utils::is_null(col[0]));
+  EXPECT_TRUE(utils::is_null(col[0]));
 }
 
 TYPED_TEST(ColumnTypedTest, SerializesAndDeserializesCorrectly) {

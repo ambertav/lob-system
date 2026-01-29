@@ -52,7 +52,7 @@ target_link_libraries(tests PRIVATE
     GTest::gtest_main
     GTest::gmock
 )
-set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests)
+set_target_properties(tests PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY})
 
 include(GoogleTest)
 gtest_discover_tests(tests)
