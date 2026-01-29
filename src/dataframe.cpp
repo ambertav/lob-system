@@ -776,22 +776,31 @@ DataFrame DataFrame::select(const std::vector<std::string>& subset) const {
   return df;
 }
 
-DataFrame DataFrame::get_last(size_t start) const {
-  if (start >= rows) {
-    throw std::out_of_range("index out of range");
+DataFrame DataFrame::slice(size_t start, size_t end) const {
+  if (end == 0 || end > rows) {
+    end = rows;
+  }
+
+  if (start >= end) {
+    throw std::out_of_range("invalid range");
   }
 
   DataFrame df{};
-  for (const auto& [column_name, col] : columns) {
+  df.column_info = column_info;
+
+  for (const auto& column_name : column_info) {
+    const auto& col{columns.at(column_name)};
     std::visit(
         [&](const auto& column) {
           using T = std::decay_t<decltype(column)>::value_type;
-          std::vector<T> copy(column.begin() + start, column.end());
-
-          df.add_column<T>(column_name, copy);
+          std::vector<T> copy{column.begin() + start, column.begin() + end};
+          df.columns[column_name] = Column<T>(std::move(copy));
         },
         col);
   }
+
+  df.rows = end - start;
+  df.cols = column_info.size();
 
   return df;
 }

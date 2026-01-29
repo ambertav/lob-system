@@ -120,7 +120,8 @@ class DataFrame {
   DataFrame& drop_duplicates(const std::vector<std::string>& subset = {});
 
   template <Storable T>
-  DataFrame& fillna(const T& value, const std::vector<std::string>& subset = {});
+  DataFrame& fillna(const T& value,
+                    const std::vector<std::string>& subset = {});
 
   DataFrame& ffill(const std::vector<std::string>& subset = {});
   DataFrame& bfill(const std::vector<std::string>& subset = {});
@@ -132,7 +133,20 @@ class DataFrame {
   DataFrame& sort_by(const std::string& column_name, bool ascending = true);
 
   DataFrame select(const std::vector<std::string>& subset) const;
-  DataFrame get_last(size_t start) const;
+  DataFrame slice(size_t start = 0, size_t end = 0) const;
+
+  // =====================================
+  // join methods
+  // =====================================
+
+//   static DataFrame left_join(const DataFrame& left, const DataFrame& right,
+//                              const std::vector<std::string>& on);
+//   static DataFrame right_join(const DataFrame& left, const DataFrame& right,
+//                               const std::vector<std::string>& on);
+//   static DataFrame inner_join(const DataFrame& left, const DataFrame& right,
+//                               const std::vector<std::string>& on);
+//   static DataFrame outer_join(const DataFrame& left, const DataFrame& right,
+//                               const std::vector<std::string>& on);
 
   // =====================================
   // statistical methods
