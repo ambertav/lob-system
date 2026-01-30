@@ -139,10 +139,11 @@ class DataFrame {
   // join methods
   // =====================================
 
-//   static DataFrame left_join(const DataFrame& left, const DataFrame& right,
-//                              const std::vector<std::string>& on);
-//   static DataFrame right_join(const DataFrame& left, const DataFrame& right,
-//                               const std::vector<std::string>& on);
+  static DataFrame left_join(const DataFrame& left, const DataFrame& right,
+                             const std::vector<std::string>& on);
+  static DataFrame right_join(const DataFrame& left, const DataFrame& right,
+                              const std::vector<std::string>& on);
+
 //   static DataFrame inner_join(const DataFrame& left, const DataFrame& right,
 //                               const std::vector<std::string>& on);
 //   static DataFrame outer_join(const DataFrame& left, const DataFrame& right,
@@ -196,7 +197,7 @@ class DataFrame {
       char delimiter) const;
   void compact_rows(const std::vector<size_t>& removal_indices);
   void validate_subset(const std::vector<std::string>& subset) const;
-  void combine_hash(size_t& row_hash, size_t value_hash) const;
+  static void combine_hash(size_t& row_hash, size_t value_hash);
   void print(size_t start, size_t end) const;
 
   template <typename Func>

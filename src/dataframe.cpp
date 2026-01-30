@@ -806,6 +806,144 @@ DataFrame DataFrame::slice(size_t start, size_t end) const {
 }
 
 // =====================================
+// join methods
+// =====================================
+
+DataFrame DataFrame::left_join(const DataFrame& left, const DataFrame& right,
+                               const std::vector<std::string>& on) {
+  left.validate_subset(on);
+  right.validate_subset(on);
+
+  std::vector<std::string> all_column_names{};
+  std::vector<std::string>
+      right_only_column_names{};  // to easily access which values to append
+  std::unordered_map<std::string, ColumnVariant> result{};
+
+  // initialize left df columns
+  for (const auto& column_name : left.column_names()) {
+    all_column_names.push_back(column_name);
+    const ColumnVariant* col{left.get_column(column_name)};
+    std::visit(
+        [&](const auto& column) {
+          using T = std::decay_t<decltype(column)>::value_type;
+          result[column_name] =
+              Column<T>{left.nrows()};  // initializes columns with approx size
+        },
+        *col);
+  }
+
+  // initialize right df columns
+  for (const auto& column_name : right.column_names()) {
+    auto it{std::ranges::find(on, column_name)};
+    if (it == on.end()) {
+      all_column_names.push_back(column_name);
+      right_only_column_names.push_back(column_name);
+      const ColumnVariant* col{right.get_column(column_name)};
+      std::visit(
+          [&](const auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            result[column_name] = Column<T>{
+                left.nrows()};  // initializes columns with approx size
+          },
+          *col);
+    }
+  }
+
+  std::unordered_map<size_t, std::vector<Row>> hashes{};
+
+  for (size_t i{}; i < right.nrows(); ++i) {
+    size_t row_hash{};
+    for (const auto& column_name : on) {
+      const ColumnVariant* column{right.get_column(column_name)};
+      std::visit(
+          [&](const auto& col) {
+            using T = std::decay_t<decltype(col)>::value_type;
+            T value{col[i]};
+            combine_hash(row_hash, std::hash<T>{}(value));
+          },
+          *column);
+    }
+    hashes[row_hash].push_back(right.get_row(i));
+  }
+
+  size_t total_rows{};
+
+  for (size_t i{}; i < left.nrows(); ++i) {
+    size_t row_hash{};
+    for (const auto& column_name : on) {
+      const ColumnVariant* column{left.get_column(column_name)};
+      std::visit(
+          [&](const auto& col) {
+            using T = std::decay_t<decltype(col)>::value_type;
+            T value{col[i]};
+            combine_hash(row_hash, std::hash<T>{}(value));
+          },
+          *column);
+    }
+
+    auto it{hashes.find(row_hash)};
+    if (it != hashes.end()) {
+      total_rows += it->second.size();
+
+      for (const Row& right_row : it->second) {
+        for (const auto& column_name : left.column_names()) {
+          const ColumnVariant* left_col{left.get_column(column_name)};
+          std::visit(
+              [&](const auto& column) {
+                using T = std::decay_t<decltype(column)>::value_type;
+                T value = column[i];
+                std::get<Column<T>>(result[column_name]).append(value);
+              },
+              *left_col);
+        }
+
+        for (const auto& column_name : right_only_column_names) {
+          std::visit(
+              [&](auto& column) {
+                using T = std::decay_t<decltype(column)>::value_type;
+                T value{right_row.at<T>(column_name)};
+                std::get<Column<T>>(result[column_name]).append(value);
+              },
+              result[column_name]);
+        }
+      }
+
+    } else {  // append nulls for right
+      ++total_rows;
+
+      for (const auto& column_name : left.column_names()) {
+        const ColumnVariant* left_col{left.get_column(column_name)};
+        std::visit(
+            [&](const auto& column) {
+              using T = std::decay_t<decltype(column)>::value_type;
+              T value = column[i];
+              std::get<Column<T>>(result[column_name]).append(value);
+            },
+            *left_col);
+      }
+
+      for (const auto& column_name : right_only_column_names) {
+        std::visit(
+            [&](auto& column) {
+              using T = std::decay_t<decltype(column)>::value_type;
+              std::get<Column<T>>(result[column_name])
+                  .append(utils::get_null<T>());
+            },
+            result[column_name]);
+      }
+    }
+  }
+
+  return DataFrame(total_rows, all_column_names.size(), all_column_names,
+                   result);
+}
+
+DataFrame DataFrame::right_join(const DataFrame& left, const DataFrame& right,
+                                const std::vector<std::string>& on) {
+  return DataFrame::left_join(right, left, on);
+}
+
+// =====================================
 // statistical methods
 // =====================================
 
@@ -1122,7 +1260,7 @@ void DataFrame::validate_subset(const std::vector<std::string>& subset) const {
   }
 }
 
-void DataFrame::combine_hash(size_t& row_hash, size_t value_hash) const {
+void DataFrame::combine_hash(size_t& row_hash, size_t value_hash) {
   row_hash ^= value_hash + 0x9e3779b9 + (row_hash << 6) + (row_hash >> 2);
 }
 
