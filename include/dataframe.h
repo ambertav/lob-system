@@ -139,15 +139,16 @@ class DataFrame {
   // join methods
   // =====================================
 
+  static DataFrame inner_join(const DataFrame& left, const DataFrame& right,
+                              const std::vector<std::string>& on);
   static DataFrame left_join(const DataFrame& left, const DataFrame& right,
                              const std::vector<std::string>& on);
   static DataFrame right_join(const DataFrame& left, const DataFrame& right,
                               const std::vector<std::string>& on);
-
-//   static DataFrame inner_join(const DataFrame& left, const DataFrame& right,
-//                               const std::vector<std::string>& on);
-//   static DataFrame outer_join(const DataFrame& left, const DataFrame& right,
-//                               const std::vector<std::string>& on);
+  static DataFrame full_join(const DataFrame& left, const DataFrame& right,
+                             const std::vector<std::string>& on);
+  static DataFrame anti_join(const DataFrame& df, const DataFrame& other,
+                             const std::vector<std::string>& on);
 
   // =====================================
   // statistical methods
@@ -191,13 +192,29 @@ class DataFrame {
   // =====================================
  private:
   void normalize_length();
+
   std::unordered_map<std::string, ColumnType> infer_types(
       std::string_view data, const std::vector<std::string>& headers,
       const std::unordered_map<std::string, ColumnType>& types,
       char delimiter) const;
+
   void compact_rows(const std::vector<size_t>& removal_indices);
+
   void validate_subset(const std::vector<std::string>& subset) const;
+
   static void combine_hash(size_t& row_hash, size_t value_hash);
+
+  static size_t compute_row_hash(const DataFrame& df, size_t index,
+                                 const std::vector<std::string>& on);
+
+  static std::unordered_map<size_t, std::vector<Row>> build_row_hash_map(
+      const DataFrame& df, const std::vector<std::string>& on);
+
+  static std::tuple < std::vector<std::string>, std::vector<std::string>,
+      std::unordered_map<std::string, ColumnVariant>> setup_join(
+          const DataFrame& left, const DataFrame& right,
+          const std::vector<std::string>& on, size_t size);
+
   void print(size_t start, size_t end) const;
 
   template <typename Func>
