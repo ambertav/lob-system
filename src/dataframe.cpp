@@ -869,8 +869,7 @@ DataFrame DataFrame::left_join(const DataFrame& left, const DataFrame& right,
       std::visit(
           [&](const auto& column) {
             using T = std::decay_t<decltype(column)>::value_type;
-            T value = column[i];
-            std::get<Column<T>>(result[column_name]).append(value);
+            std::get<Column<T>>(result[column_name]).append(column[i]);
           },
           *left_col);
     }
@@ -882,11 +881,9 @@ DataFrame DataFrame::left_join(const DataFrame& left, const DataFrame& right,
           [&](auto& column) {
             using T = std::decay_t<decltype(column)>::value_type;
             if (row != nullptr) {
-              T value{row->at<T>(column_name)};
-              std::get<Column<T>>(result[column_name]).append(value);
+              column.append(row->at<T>(column_name));
             } else {
-              std::get<Column<T>>(result[column_name])
-                  .append(utils::get_null<T>());
+              column.append(utils::get_null<T>());
             }
           },
           result[column_name]);
@@ -918,6 +915,128 @@ DataFrame DataFrame::left_join(const DataFrame& left, const DataFrame& right,
 DataFrame DataFrame::right_join(const DataFrame& left, const DataFrame& right,
                                 const std::vector<std::string>& on) {
   return DataFrame::left_join(right, left, on);
+}
+
+DataFrame DataFrame::full_join(const DataFrame& left, const DataFrame& right,
+                               const std::vector<std::string>& on) {
+  left.validate_subset(on);
+  right.validate_subset(on);
+
+  auto [all_column_names, right_only_column_names, result] =
+      setup_join(left, right, on, (right.nrows() * left.nrows()));
+
+  std::unordered_map<size_t, std::vector<Row>> hashes{
+      build_row_hash_map(right, on)};
+  std::unordered_set<size_t> matched_rows{};
+
+  auto append_from_df = [&](const DataFrame& df, size_t i,
+                            const std::vector<std::string>& column_names) {
+    for (const auto& column_name : column_names) {
+      const ColumnVariant* col{df.get_column(column_name)};
+      std::visit(
+          [&](const auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            std::get<Column<T>>(result[column_name]).append(column[i]);
+          },
+          *col);
+    }
+  };
+
+  auto append_from_row = [&](const Row& row,
+                             const std::vector<std::string>& column_names) {
+    for (const auto& column_name : column_names) {
+      std::visit(
+          [&](auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            column.append(row.at<T>(column_name));
+          },
+          result[column_name]);
+    }
+  };
+
+  auto append_nulls = [&](const std::vector<std::string>& column_names) {
+    for (const auto& column_name : column_names) {
+      std::visit(
+          [&](auto& column) {
+            using T = std::decay_t<decltype(column)>::value_type;
+            column.append(utils::get_null<T>());
+          },
+          result[column_name]);
+    }
+  };
+
+  size_t total_rows{};
+  for (size_t i{}; i < left.nrows(); ++i) {
+    size_t row_hash{compute_row_hash(left, i, on)};
+    auto it{hashes.find(row_hash)};
+    if (it != hashes.end()) {
+      total_rows += it->second.size();
+      for (const Row& right_row : it->second) {
+        append_from_df(left, i, left.column_names());
+        append_from_row(right_row, right_only_column_names);
+      }
+      matched_rows.insert(row_hash);
+    } else {
+      append_from_df(left, i, left.column_names());
+      append_nulls(right_only_column_names);
+      ++total_rows;
+    }
+  }
+
+  for (const auto& [row_hash, rows] : hashes) {
+    if (!matched_rows.contains(row_hash)) {
+      total_rows += rows.size();
+      for (const Row& row : rows) {
+        append_nulls(left.column_names());
+        append_from_row(row, right_only_column_names);
+      }
+    }
+  }
+
+  return DataFrame(total_rows, all_column_names.size(), all_column_names,
+                   result);
+}
+
+DataFrame DataFrame::anti_join(const DataFrame& df, const DataFrame& other,
+                               const std::vector<std::string>& on) {
+  df.validate_subset(on);
+  other.validate_subset(on);
+
+  const auto& column_names{df.column_names()};
+
+  std::unordered_map<std::string, ColumnVariant> result{};
+  for (const auto& column_name : column_names) {
+    const ColumnVariant* col{df.get_column(column_name)};
+    std::visit(
+        [&](const auto& column) {
+          using T = std::decay_t<decltype(column)>::value_type;
+          result[column_name] = Column<T>(df.nrows());
+        },
+        *col);
+  }
+
+  std::unordered_map<size_t, std::vector<Row>> hashes{
+      build_row_hash_map(other, on)};
+
+  size_t total_rows{};
+  for (size_t i{}; i < df.nrows(); ++i) {
+    size_t row_hash{compute_row_hash(df, i, on)};
+    auto it{hashes.find(row_hash)};
+    if (it == hashes.end()) {
+      for (const auto& column_name : column_names) {
+        const ColumnVariant* col{df.get_column(column_name)};
+        std::visit(
+            [&](const auto& column) {
+              using T = std::decay_t<decltype(column)>::value_type;
+              std::get<Column<T>>(result[column_name]).append(column[i]);
+            },
+            *col);
+      }
+      ++total_rows;
+    }
+  }
+
+  return DataFrame(total_rows, column_names.size(), column_names, result);
 }
 
 // =====================================
